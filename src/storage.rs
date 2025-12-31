@@ -1,7 +1,6 @@
 use std::fs;
-use std::io::{self, Write};
-use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
+use std::io;
+use std::path::Path;
 
 use crate::note::{Note, Folder, NoteMetadata};
 

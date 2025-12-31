@@ -6,7 +6,7 @@ mod note;
 mod storage;
 mod search;
 
-use note::{Note, Folder};
+use note::Folder;
 use storage::Storage;
 use search::FuzzySearch;
 
@@ -184,40 +184,60 @@ impl eframe::App for NoteTakingApp {
                             ui.label("Search Results:");
                             ui.separator();
                             
-                            for (folder_idx, note_idx) in self.search_results.clone() {
+                            // Collect display data first to avoid borrow issues
+                            let search_display: Vec<_> = {
                                 let storage = self.storage.lock().unwrap();
-                                if let Some(folder) = storage.folders.get(folder_idx) {
-                                    if let Some(note) = folder.notes.get(note_idx) {
-                                        let label = format!("📄 {} (in {})", note.title, folder.name);
-                                        if ui.selectable_label(
-                                            self.selected_folder == Some(folder_idx) && 
-                                            self.selected_note == Some(note_idx),
-                                            label
-                                        ).clicked() {
-                                            self.save_current_note();
-                                            self.selected_folder = Some(folder_idx);
-                                            self.selected_note = Some(note_idx);
-                                            self.current_note_content = note.content.clone();
-                                            self.is_editing = false;
-                                        }
-                                    }
+                                self.search_results.iter().filter_map(|(folder_idx, note_idx)| {
+                                    storage.folders.get(*folder_idx).and_then(|folder| {
+                                        folder.notes.get(*note_idx).map(|note| {
+                                            (
+                                                *folder_idx,
+                                                *note_idx,
+                                                format!("📄 {} (in {})", note.title, folder.name),
+                                                note.content.clone()
+                                            )
+                                        })
+                                    })
+                                }).collect()
+                            };
+                            
+                            for (folder_idx, note_idx, label, content) in search_display {
+                                if ui.selectable_label(
+                                    self.selected_folder == Some(folder_idx) && 
+                                    self.selected_note == Some(note_idx),
+                                    label
+                                ).clicked() {
+                                    self.save_current_note();
+                                    self.selected_folder = Some(folder_idx);
+                                    self.selected_note = Some(note_idx);
+                                    self.current_note_content = content;
+                                    self.is_editing = false;
                                 }
                             }
                         } else {
-                            // Show folder tree
-                            let storage = self.storage.lock().unwrap();
-                            for (folder_idx, folder) in storage.folders.iter().enumerate() {
-                                ui.collapsing(&folder.name, |ui| {
-                                    for (note_idx, note) in folder.notes.iter().enumerate() {
+                            // Show folder tree - collect data first to avoid borrow issues
+                            let folders_display: Vec<_> = {
+                                let storage = self.storage.lock().unwrap();
+                                storage.folders.iter().enumerate().map(|(folder_idx, folder)| {
+                                    let notes: Vec<_> = folder.notes.iter().enumerate()
+                                        .map(|(note_idx, note)| (note_idx, note.title.clone(), note.content.clone()))
+                                        .collect();
+                                    (folder_idx, folder.name.clone(), notes)
+                                }).collect()
+                            };
+                            
+                            for (folder_idx, folder_name, notes) in folders_display {
+                                ui.collapsing(&folder_name, |ui| {
+                                    for (note_idx, title, content) in notes {
                                         if ui.selectable_label(
                                             self.selected_folder == Some(folder_idx) && 
                                             self.selected_note == Some(note_idx),
-                                            &note.title
+                                            &title
                                         ).clicked() {
                                             self.save_current_note();
                                             self.selected_folder = Some(folder_idx);
                                             self.selected_note = Some(note_idx);
-                                            self.current_note_content = note.content.clone();
+                                            self.current_note_content = content;
                                             self.is_editing = false;
                                         }
                                     }
@@ -231,56 +251,68 @@ impl eframe::App for NoteTakingApp {
         // Main editor panel
         egui::CentralPanel::default().show(ctx, |ui| {
             if let (Some(folder_idx), Some(note_idx)) = (self.selected_folder, self.selected_note) {
-                let storage = self.storage.lock().unwrap();
-                if let Some(folder) = storage.folders.get(folder_idx) {
-                    if let Some(note) = folder.notes.get(note_idx) {
-                        ui.horizontal(|ui| {
-                            ui.heading(&note.title);
-                            ui.separator();
-                            
-                            if self.is_editing {
-                                if ui.button("💾 Save").clicked() {
-                                    drop(storage);
-                                    self.save_current_note();
-                                    self.is_editing = false;
-                                }
-                                if ui.button("❌ Cancel").clicked() {
-                                    self.current_note_content = note.content.clone();
-                                    self.is_editing = false;
-                                }
-                            } else {
-                                if ui.button("✏ Edit").clicked() {
-                                    self.is_editing = true;
-                                }
-                            }
-                        });
-                        
+                // Collect note data first to avoid borrow conflicts
+                let note_data = {
+                    let storage = self.storage.lock().unwrap();
+                    storage.folders.get(folder_idx).and_then(|folder| {
+                        folder.notes.get(note_idx).map(|note| {
+                            (note.title.clone(), note.created_at.clone(), note.updated_at.clone())
+                        })
+                    })
+                };
+                
+                if let Some((title, created_at, updated_at)) = note_data {
+                    ui.horizontal(|ui| {
+                        ui.heading(&title);
                         ui.separator();
                         
-                        ui.label(format!("Created: {}", note.created_at));
-                        ui.label(format!("Updated: {}", note.updated_at));
-                        
-                        ui.separator();
-                        
-                        egui::ScrollArea::vertical().show(ui, |ui| {
-                            if self.is_editing {
-                                ui.add(
-                                    egui::TextEdit::multiline(&mut self.current_note_content)
-                                        .desired_width(f32::INFINITY)
-                                        .desired_rows(30)
-                                        .font(egui::TextStyle::Monospace)
-                                );
-                            } else {
-                                // Render markdown
-                                ui.add(
-                                    egui::TextEdit::multiline(&mut self.current_note_content.as_str())
-                                        .desired_width(f32::INFINITY)
-                                        .desired_rows(30)
-                                        .interactive(false)
-                                );
+                        if self.is_editing {
+                            if ui.button("💾 Save").clicked() {
+                                self.save_current_note();
+                                self.is_editing = false;
                             }
-                        });
-                    }
+                            if ui.button("❌ Cancel").clicked() {
+                                // Reload content from storage
+                                let storage = self.storage.lock().unwrap();
+                                if let Some(folder) = storage.folders.get(folder_idx) {
+                                    if let Some(note) = folder.notes.get(note_idx) {
+                                        self.current_note_content = note.content.clone();
+                                    }
+                                }
+                                self.is_editing = false;
+                            }
+                        } else {
+                            if ui.button("✏ Edit").clicked() {
+                                self.is_editing = true;
+                            }
+                        }
+                    });
+                    
+                    ui.separator();
+                    
+                    ui.label(format!("Created: {}", created_at));
+                    ui.label(format!("Updated: {}", updated_at));
+                    
+                    ui.separator();
+                    
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        if self.is_editing {
+                            ui.add(
+                                egui::TextEdit::multiline(&mut self.current_note_content)
+                                    .desired_width(f32::INFINITY)
+                                    .desired_rows(30)
+                                    .font(egui::TextStyle::Monospace)
+                            );
+                        } else {
+                            // Render markdown
+                            ui.add(
+                                egui::TextEdit::multiline(&mut self.current_note_content.as_str())
+                                    .desired_width(f32::INFINITY)
+                                    .desired_rows(30)
+                                    .interactive(false)
+                            );
+                        }
+                    });
                 }
             } else {
                 ui.vertical_centered(|ui| {
