@@ -107,10 +107,21 @@ impl NoteTakingApp {
         if let Some(folder_idx) = self.selected_folder {
             if !self.new_note_title.is_empty() {
                 let mut storage = self.storage.lock().unwrap();
-                storage.create_note(folder_idx, &self.new_note_title).ok();
-                self.new_note_title.clear();
-                self.show_new_note_dialog = false;
+                match storage.create_note(folder_idx, &self.new_note_title) {
+                    Ok(_) => {
+                        println!("✓ Note created: {} in folder {}", self.new_note_title, folder_idx);
+                        self.new_note_title.clear();
+                        self.show_new_note_dialog = false;
+                    }
+                    Err(e) => {
+                        eprintln!("✗ Failed to create note: {}", e);
+                    }
+                }
+            } else {
+                println!("⚠ Note title is empty");
             }
+        } else {
+            println!("⚠ No folder selected");
         }
     }
     
@@ -232,7 +243,18 @@ impl eframe::App for NoteTakingApp {
                             };
                             
                             for (folder_idx, folder_name, notes) in folders_display {
-                                ui.collapsing(&folder_name, |ui| {
+                                // Show if this folder is selected
+                                let is_selected = self.selected_folder == Some(folder_idx);
+                                let folder_label = if is_selected {
+                                    format!("📁 {} ✓", folder_name)
+                                } else {
+                                    format!("📁 {}", folder_name)
+                                };
+                                
+                                let header_response = ui.collapsing(&folder_label, |ui| {
+                                    if notes.is_empty() {
+                                        ui.label("(No notes yet)");
+                                    }
                                     for (note_idx, title, content) in notes {
                                         if ui.selectable_label(
                                             self.selected_folder == Some(folder_idx) && 
@@ -247,6 +269,14 @@ impl eframe::App for NoteTakingApp {
                                         }
                                     }
                                 });
+                                
+                                // Click on folder name selects the folder
+                                if header_response.header_response.clicked() {
+                                    self.selected_folder = Some(folder_idx);
+                                    self.selected_note = None;
+                                    self.current_note_content.clear();
+                                    println!("✓ Folder selected: {} (index {})", folder_name, folder_idx);
+                                }
                             }
                         }
                     });
@@ -356,7 +386,19 @@ impl eframe::App for NoteTakingApp {
                 .resizable(false)
                 .show(ctx, |ui| {
                     ui.label("Note title:");
-                    ui.text_edit_singleline(&mut self.new_note_title);
+                    let response = ui.text_edit_singleline(&mut self.new_note_title);
+                    
+                    // Auto-focus the text field
+                    if response.changed() {
+                        // Do nothing, just to capture the response
+                    }
+                    
+                    // Support Enter key to create
+                    if ui.input(|i| i.key_pressed(egui::Key::Enter)) && !self.new_note_title.is_empty() {
+                        self.create_note();
+                    }
+                    
+                    ui.add_space(5.0);
                     
                     ui.horizontal(|ui| {
                         if ui.button("Create").clicked() {
@@ -367,6 +409,15 @@ impl eframe::App for NoteTakingApp {
                             self.show_new_note_dialog = false;
                         }
                     });
+                    
+                    // Show selected folder
+                    if let Some(folder_idx) = self.selected_folder {
+                        let storage = self.storage.lock().unwrap();
+                        if let Some(folder) = storage.folders.get(folder_idx) {
+                            ui.add_space(5.0);
+                            ui.label(format!("Creating in folder: {}", folder.name));
+                        }
+                    }
                 });
         }
     }
