@@ -1,6 +1,6 @@
 [package]
 name = "notetaking-app"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
@@ -12,3 +12,30 @@ fuzzy-matcher = "0.3"
 eframe = "0.29"
 egui = "0.29"
 rfd = "0.15"
+
+# Markdown rendering
+pulldown-cmark = "0.11"
+egui_commonmark = "0.17"
+
+# Image support
+image = "0.25"
+egui_extras = { version = "0.29", features = ["image"] }
+
+# PDF export
+printpdf = "0.7"
+
+# Encryption
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+base64 = "0.22"
+
+# Cloud sync (optional features)
+reqwest = { version = "0.12", features = ["json", "multipart"] }
+tokio = { version = "1", features = ["full"] }
+
+# Version control
+git2 = "0.19"
+
+# Theme/styling
+toml = "0.8"

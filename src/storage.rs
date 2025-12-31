@@ -134,11 +134,8 @@ impl Storage {
                 // Save content
                 fs::write(&note.file_path, &note.content)?;
                 
-                // Save metadata
-                let metadata = NoteMetadata {
-                    created_at: note.created_at.clone(),
-                    updated_at: note.updated_at.clone(),
-                };
+                // Save metadata with all new fields
+                let metadata = NoteMetadata::from_note(note);
                 let metadata_path = Path::new(&note.file_path).with_extension("meta");
                 let metadata_json = serde_json::to_string_pretty(&metadata)?;
                 fs::write(&metadata_path, metadata_json)?;

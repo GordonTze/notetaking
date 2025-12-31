@@ -5,6 +5,8 @@ use std::sync::Mutex;
 mod note;
 mod storage;
 mod search;
+mod encryption;
+mod tags;
 
 use note::Folder;
 use storage::Storage;
