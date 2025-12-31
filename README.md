@@ -13,3 +13,4 @@
 - local copies in folder structure
 - syncs to 
 # notetaking
+# notetaking
