@@ -160,11 +160,16 @@ impl eframe::App for NoteTakingApp {
                     self.show_new_folder_dialog = true;
                 }
                 
-                // New note button (only if folder selected)
-                if self.selected_folder.is_some() {
+                // New note button - always visible
+                ui.add_enabled_ui(self.selected_folder.is_some(), |ui| {
                     if ui.button("📝 New Note").clicked() {
                         self.show_new_note_dialog = true;
                     }
+                });
+                
+                // Show hint if no folder selected
+                if self.selected_folder.is_none() {
+                    ui.label("(Select a folder first)");
                 }
             });
         });
