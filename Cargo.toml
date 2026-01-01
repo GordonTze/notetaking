@@ -39,3 +39,4 @@ git2 = "0.19"
 
 # Theme/styling
 toml = "0.8"
+
