@@ -64,7 +64,6 @@ struct NoteTakingApp {
     show_new_note_dialog: bool,
 
     // UI flags
-    is_editing: bool,
     sidebar_open: bool,
     show_markdown_preview: bool,
 
@@ -162,7 +161,6 @@ impl NoteTakingApp {
             show_new_folder_dialog: false,
             new_note_title: String::new(),
             show_new_note_dialog: false,
-            is_editing: false,
             sidebar_open: true,
             show_markdown_preview: false,
             show_theme_dialog: false,
@@ -551,11 +549,14 @@ impl NoteTakingApp {
 
     // Auto-save
     fn check_auto_save(&mut self) {
-        if self.auto_save_enabled && self.is_editing {
-            let elapsed = self.last_save_time.elapsed().as_secs_f32();
-            if elapsed >= self.auto_save_interval {
-                self.save_current_note();
-                println!("✓ Auto-saved");
+        if self.auto_save_enabled && !self.show_markdown_preview {
+            // Only auto-save if we have a note selected and we're in edit mode (not preview)
+            if self.selected_folder.is_some() && self.selected_note.is_some() {
+                let elapsed = self.last_save_time.elapsed().as_secs_f32();
+                if elapsed >= self.auto_save_interval {
+                    self.save_current_note();
+                    println!("✓ Auto-saved");
+                }
             }
         }
     }
@@ -568,6 +569,40 @@ impl eframe::App for NoteTakingApp {
 
         // Check auto-save
         self.check_auto_save();
+
+        // Keyboard shortcuts
+        ctx.input(|i| {
+            // Ctrl/Cmd + S to save
+            if i.modifiers.command && i.key_pressed(egui::Key::S) {
+                self.save_current_note();
+            }
+
+            // Ctrl/Cmd + P to toggle preview
+            if i.modifiers.command && i.key_pressed(egui::Key::P) {
+                if self.selected_note.is_some() {
+                    self.show_markdown_preview = !self.show_markdown_preview;
+                }
+            }
+
+            // Ctrl/Cmd + N for new note
+            if i.modifiers.command && i.key_pressed(egui::Key::N) {
+                if self.selected_folder.is_some() {
+                    self.show_new_note_dialog = true;
+                }
+            }
+
+            // Ctrl/Cmd + F for search (focus search bar)
+            if i.modifiers.command && i.key_pressed(egui::Key::F) {
+                // Search bar will be auto-focused
+            }
+
+            // Ctrl/Cmd + E to encrypt/decrypt
+            if i.modifiers.command && i.key_pressed(egui::Key::E) {
+                if self.selected_note.is_some() {
+                    self.show_encryption_dialog = true;
+                }
+            }
+        });
 
         // Top panel with all feature buttons
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
@@ -599,12 +634,13 @@ impl eframe::App for NoteTakingApp {
                         self.show_new_folder_dialog = true;
                         ui.close_menu();
                     }
-                    if ui.button("📝 New Note").clicked() && self.selected_folder.is_some() {
+                    if ui.button("📝 New Note (Ctrl+N)").clicked() && self.selected_folder.is_some()
+                    {
                         self.show_new_note_dialog = true;
                         ui.close_menu();
                     }
                     ui.separator();
-                    if ui.button("💾 Save").clicked() {
+                    if ui.button("💾 Save (Ctrl+S)").clicked() {
                         self.save_current_note();
                         ui.close_menu();
                     }
@@ -641,13 +677,15 @@ impl eframe::App for NoteTakingApp {
                 ui.menu_button("👁 View", |ui| {
                     if ui
                         .button(if self.show_markdown_preview {
-                            "📝 Edit Mode"
+                            "📝 Edit Mode (Ctrl+P)"
                         } else {
-                            "👁 Preview Mode"
+                            "👁 Preview Mode (Ctrl+P)"
                         })
                         .clicked()
                     {
-                        self.show_markdown_preview = !self.show_markdown_preview;
+                        if self.selected_note.is_some() {
+                            self.show_markdown_preview = !self.show_markdown_preview;
+                        }
                         ui.close_menu();
                     }
                     if ui.button("🔗 Links Panel").clicked() {
@@ -670,7 +708,7 @@ impl eframe::App for NoteTakingApp {
                         self.show_tag_dialog = true;
                         ui.close_menu();
                     }
-                    if ui.button("🔐 Encrypt/Decrypt").clicked() {
+                    if ui.button("🔐 Encrypt/Decrypt (Ctrl+E)").clicked() {
                         self.show_encryption_dialog = true;
                         ui.close_menu();
                     }
@@ -819,7 +857,6 @@ impl NoteTakingApp {
                         self.selected_folder = Some(folder_idx);
                         self.selected_note = Some(note_idx);
                         self.current_note_content = content;
-                        self.is_editing = false;
                     }
                 }
             });
@@ -858,8 +895,13 @@ impl NoteTakingApp {
         };
 
         if let Some((title, created_at, updated_at, is_encrypted)) = note_data {
+            // Header with title and controls
             ui.horizontal(|ui| {
                 ui.heading(&title);
+
+                ui.add_space(10.0);
+
+                // Status indicators
                 if is_encrypted {
                     ui.label("🔒");
                 }
@@ -867,54 +909,98 @@ impl NoteTakingApp {
                     ui.label("⭐");
                 }
 
-                ui.separator();
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Preview toggle button
+                    if ui
+                        .button(if self.show_markdown_preview {
+                            "📝 Edit"
+                        } else {
+                            "👁 Preview"
+                        })
+                        .clicked()
+                    {
+                        self.show_markdown_preview = !self.show_markdown_preview;
+                        if !self.show_markdown_preview {
+                            // Switching back to edit mode, save first
+                            self.save_current_note();
+                        }
+                    }
 
-                if self.is_editing {
+                    // Save button (always visible for manual saves)
                     if ui.button("💾 Save").clicked() {
                         self.save_current_note();
-                        self.is_editing = false;
                     }
-                    if ui.button("❌ Cancel").clicked() {
-                        let storage = self.storage.lock().unwrap();
-                        if let Some(folder) = storage.folders.get(folder_idx) {
-                            if let Some(note) = folder.notes.get(note_idx) {
-                                self.current_note_content = note.content.clone();
-                            }
+
+                    // Auto-save indicator
+                    if self.auto_save_enabled {
+                        let elapsed = self.last_save_time.elapsed().as_secs_f32();
+                        let time_until_save = self.auto_save_interval - elapsed;
+                        if time_until_save > 0.0 {
+                            ui.label(format!("⏱ Auto-save in {}s", time_until_save.ceil() as i32));
+                        } else {
+                            ui.label("✓ Auto-saved");
                         }
-                        self.is_editing = false;
                     }
-                } else {
-                    if ui.button("✏ Edit").clicked() {
-                        self.is_editing = true;
-                    }
-                }
+                });
             });
 
             ui.separator();
-            ui.label(format!("Created: {} | Updated: {}", created_at, updated_at));
+
+            // Metadata
+            ui.horizontal(|ui| {
+                ui.label(format!("Created: {}", created_at));
+                ui.separator();
+                ui.label(format!("Updated: {}", updated_at));
+            });
+
             ui.separator();
 
+            // Main editor area - seamlessly editable or preview
             egui::ScrollArea::vertical().show(ui, |ui| {
-                if self.show_markdown_preview && !self.is_editing {
+                if self.show_markdown_preview {
+                    // Preview mode - read-only markdown rendering
+                    ui.horizontal(|ui| {
+                        ui.label("📖 Preview Mode");
+                        ui.label("(Click 'Edit' to modify)");
+                    });
+                    ui.separator();
+
                     egui_commonmark::CommonMarkViewer::new().show(
                         ui,
                         &mut egui_commonmark::CommonMarkCache::default(),
                         &self.current_note_content,
                     );
-                } else if self.is_editing {
-                    ui.add(
-                        egui::TextEdit::multiline(&mut self.current_note_content)
-                            .desired_width(f32::INFINITY)
-                            .desired_rows(30)
-                            .font(egui::TextStyle::Monospace),
-                    );
                 } else {
-                    ui.add(
-                        egui::TextEdit::multiline(&mut self.current_note_content.as_str())
-                            .desired_width(f32::INFINITY)
-                            .desired_rows(30)
-                            .interactive(false),
-                    );
+                    // Edit mode - always editable, auto-saves
+                    ui.horizontal(|ui| {
+                        ui.label("✏️ Edit Mode");
+                        if self.auto_save_enabled {
+                            ui.label("(Auto-saving every 30s)");
+                        } else {
+                            ui.label("(Remember to save manually)");
+                        }
+                    });
+                    ui.separator();
+
+                    let text_edit = egui::TextEdit::multiline(&mut self.current_note_content)
+                        .desired_width(f32::INFINITY)
+                        .desired_rows(30)
+                        .font(egui::TextStyle::Monospace);
+
+                    let response = ui.add(text_edit);
+
+                    // Auto-focus on the editor when note is first selected
+                    response.request_focus();
+
+                    // Show helpful hints at the bottom
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        ui.label("💡 Tips:");
+                        ui.label("• Just start typing!");
+                        ui.label("• Use Markdown: **bold**, *italic*, # headers");
+                        ui.label("• Link notes: [[Note Name]]");
+                        ui.label("• Toggle preview to see formatted text");
+                    });
                 }
             });
         }
@@ -922,12 +1008,77 @@ impl NoteTakingApp {
 
     fn render_welcome_screen(&self, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| {
-            ui.add_space(200.0);
+            ui.add_space(100.0);
+
+            // Main heading
             ui.heading("📝 Enhanced Notetaking App");
             ui.add_space(20.0);
-            ui.label("Select a note or create one to get started");
+
+            // Quick start instructions
+            ui.label("🚀 Quick Start:");
             ui.add_space(10.0);
-            ui.label("✨ Features: Themes • Tags • Encryption • PDF Export • Links • More!");
+
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 20.0;
+                ui.label("1️⃣ Click 'File' → 'New Folder'");
+                ui.label("2️⃣ Click the folder to select it");
+                ui.label("3️⃣ Click 'File' → 'New Note'");
+            });
+
+            ui.add_space(20.0);
+            ui.label("4️⃣ Click the note and start typing immediately!");
+
+            ui.add_space(40.0);
+            ui.separator();
+            ui.add_space(20.0);
+
+            // Feature highlights
+            ui.label("✨ Key Features:");
+            ui.add_space(10.0);
+
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 15.0;
+                ui.label("🎨 7 Themes");
+                ui.label("🏷️ Smart Tags");
+                ui.label("🔐 Encryption");
+                ui.label("📄 PDF Export");
+                ui.label("⭐ Favorites");
+            });
+
+            ui.add_space(10.0);
+
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 15.0;
+                ui.label("📚 Version History");
+                ui.label("👁️ Markdown Preview");
+                ui.label("💾 Auto-Save");
+                ui.label("🔗 Note Linking");
+                ui.label("📊 Statistics");
+            });
+
+            ui.add_space(40.0);
+            ui.separator();
+            ui.add_space(20.0);
+
+            // Pro tips
+            ui.label("💡 Pro Tips:");
+            ui.add_space(10.0);
+
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                ui.label("• No 'Edit' button needed - just click and type!");
+                ui.label("• Auto-saves every 30 seconds");
+                ui.label("• Use **bold** and *italic* in Markdown");
+            });
+
+            ui.add_space(10.0);
+
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                ui.label("• Link notes with [[Note Name]]");
+                ui.label("• Press '👁 Preview' to see formatted text");
+                ui.label("• Change themes in Settings menu");
+            });
         });
     }
 
