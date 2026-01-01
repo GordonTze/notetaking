@@ -1,6 +1,6 @@
-use git2::{Repository, Signature, IndexAddOption, Oid};
+use git2::{Repository, Signature, Oid};
 use std::path::{Path, PathBuf};
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
