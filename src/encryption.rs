@@ -6,7 +6,6 @@ use argon2::{Argon2, PasswordHasher, PasswordHash, PasswordVerifier};
 use argon2::password_hash::{SaltString, rand_core::RngCore};
 use base64::{Engine as _, engine::general_purpose};
 use serde::{Deserialize, Serialize};
-use std::io;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedData {

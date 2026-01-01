@@ -2,7 +2,6 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use crate::tags::NoteTags;
 use crate::encryption::EncryptedData;
-use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Note {

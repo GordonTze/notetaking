@@ -1,4 +1,4 @@
-use egui::{Color32, Visuals, Style};
+use egui::{Color32, Visuals};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
