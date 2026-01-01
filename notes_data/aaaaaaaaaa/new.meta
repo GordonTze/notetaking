@@ -1,15 +1,11 @@
 {
   "created_at": "2025-12-31 07:44:00",
-  "updated_at": "2026-01-01 03:23:04",
+  "updated_at": "2026-01-01 07:39:11",
   "tags": {
     "tag_indices": []
   },
-  "is_encrypted": true,
-  "encrypted_data": {
-    "ciphertext": "TuZWDsBy21xoCK9981BcSZs7hTW1cJ23BKLM4hO4UHUY0FTTFvsiXW7490QfyGJD51Won5WlIJ1MTNKG17XcSAAn0hXr5tUv6kMhMYv9C6QYSk4CmTnE49Zb5obNrJurEa3ATCe1313TF4LuEVVPoK7KTjTjga/U7mwxbVzqSxuxHHv5GOOAaghzXZCHZn59l8tkieOdoPF/y9WPX3fu1J1v2L0folazYs+emhbOMcOpH+uVhrwlg6sykIy0IAo=",
-    "nonce": "xVXvm5fTKgzrPJ3m",
-    "salt": "vVmwYrd9X0J0xt6j7MsgOw=="
-  },
+  "is_encrypted": false,
+  "encrypted_data": null,
   "linked_notes": [],
   "embedded_images": []
 }
