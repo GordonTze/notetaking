@@ -16,7 +16,7 @@ pub struct Theme {
 
 impl Default for Theme {
     fn default() -> Self {
-        Self::light()
+        Self::dark() // Changed from light() to dark()
     }
 }
 

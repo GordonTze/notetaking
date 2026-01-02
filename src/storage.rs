@@ -105,7 +105,7 @@ impl Storage {
         Ok(())
     }
     
-    pub fn create_note(&mut self, folder_idx: usize, title: &str) -> io::Result<()> {
+    pub fn create_note(&mut self, folder_idx: usize, title: &str) -> io::Result<usize> {
         if let Some(folder) = self.folders.get_mut(folder_idx) {
             let file_name = format!("{}.md", sanitize_filename(title));
             let file_path = Path::new(&folder.path).join(&file_name);
@@ -122,7 +122,9 @@ impl Storage {
             let note = Note::new(title.to_string(), file_path.to_string_lossy().to_string());
             folder.add_note(note);
             
-            Ok(())
+            // Return the index of the newly created note
+            let note_idx = folder.notes.len() - 1;
+            Ok(note_idx)
         } else {
             Err(io::Error::new(io::ErrorKind::NotFound, "Folder not found"))
         }
