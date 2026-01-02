@@ -630,189 +630,135 @@ impl eframe::App for NoteTakingApp {
             }
         });
 
-        // Top panel with all feature buttons
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                // Sidebar toggle
-                if ui
-                    .button(if self.sidebar_open { "◀" } else { "▶" })
-                    .clicked()
-                {
-                    self.sidebar_open = !self.sidebar_open;
-                }
-
-                ui.separator();
-
-                // Search
-                ui.label("🔍");
-                let search_response = ui.add(
-                    egui::TextEdit::singleline(&mut self.search_query).hint_text("Search notes..."),
-                );
-                if search_response.changed() {
-                    self.perform_search();
-                }
-
-                ui.separator();
-
-                // File menu
-                ui.menu_button("📁 File", |ui| {
-                    if ui.button("📁 New Folder").clicked() {
-                        self.show_new_folder_dialog = true;
-                        ui.close_menu();
-                    }
-                    if ui.button("📝 New Note (Ctrl+N)").clicked() && self.selected_folder.is_some()
+        // Minimalist top panel
+        egui::TopBottomPanel::top("top_panel")
+            .frame(egui::Frame::none().inner_margin(egui::Margin::symmetric(12.0, 8.0)))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    // Sidebar toggle
+                    if ui
+                        .small_button(if self.sidebar_open { "◀" } else { "▶" })
+                        .clicked()
                     {
+                        self.sidebar_open = !self.sidebar_open;
+                    }
+
+                    ui.add_space(8.0);
+
+                    // Clean search bar
+                    let search_response = ui.add(
+                        egui::TextEdit::singleline(&mut self.search_query)
+                            .hint_text("Search...")
+                            .desired_width(200.0),
+                    );
+                    if search_response.changed() {
+                        self.perform_search();
+                    }
+
+                    ui.add_space(8.0);
+
+                    // Minimalist menu buttons
+                    if ui.small_button("+ Note").clicked() && self.selected_folder.is_some() {
                         self.show_new_note_dialog = true;
-                        ui.close_menu();
                     }
-                    ui.separator();
-                    if ui.button("💾 Save (Ctrl+S)").clicked() {
-                        self.save_current_note();
-                        ui.close_menu();
-                    }
-                    if ui.button("☁ Sync to Cloud").clicked() {
-                        self.sync_to_cloud();
-                        ui.close_menu();
-                    }
-                });
 
-                // Edit menu
-                ui.menu_button("✏ Edit", |ui| {
-                    if ui.button("🔗 Insert Link").clicked() {
-                        ui.close_menu();
+                    if ui.small_button("+ Folder").clicked() {
+                        self.show_new_folder_dialog = true;
                     }
-                    if ui.button("🖼 Insert Image").clicked() {
-                        self.show_image_dialog = true;
-                        ui.close_menu();
-                    }
-                    ui.separator();
-                    if ui
-                        .button(if self.is_favorite() {
-                            "⭐ Unfavorite"
-                        } else {
-                            "☆ Favorite"
-                        })
-                        .clicked()
-                    {
-                        self.toggle_favorite();
-                        ui.close_menu();
-                    }
-                });
 
-                // View menu
-                ui.menu_button("👁 View", |ui| {
-                    if ui
-                        .button(if self.show_markdown_preview {
-                            "📝 Edit Mode (Ctrl+P)"
-                        } else {
-                            "👁 Preview Mode (Ctrl+P)"
-                        })
-                        .clicked()
-                    {
+                    ui.separator();
+
+                    // Compact menus
+                    ui.menu_button("View", |ui| {
+                        if ui
+                            .button(if self.show_markdown_preview {
+                                "Edit"
+                            } else {
+                                "Preview"
+                            })
+                            .clicked()
+                        {
+                            if self.selected_note.is_some() {
+                                self.show_markdown_preview = !self.show_markdown_preview;
+                            }
+                            ui.close_menu();
+                        }
+                        if ui.button("Statistics").clicked() {
+                            self.show_statistics = !self.show_statistics;
+                            ui.close_menu();
+                        }
+                    });
+
+                    ui.menu_button("Tools", |ui| {
+                        if ui.button("Tags").clicked() {
+                            self.show_tag_dialog = true;
+                            ui.close_menu();
+                        }
+                        if ui.button("Export").clicked() {
+                            self.show_export_dialog = true;
+                            ui.close_menu();
+                        }
+                        if ui.button("Versions").clicked() {
+                            self.load_version_history();
+                            self.show_version_history = true;
+                            ui.close_menu();
+                        }
+                        if ui.button("Encrypt").clicked() {
+                            self.show_encryption_dialog = true;
+                            ui.close_menu();
+                        }
+                    });
+
+                    ui.menu_button("⚙", |ui| {
+                        if ui.button("Theme").clicked() {
+                            self.show_theme_dialog = true;
+                            ui.close_menu();
+                        }
+                        if ui
+                            .button(if self.theme_manager.current_theme.is_dark {
+                                "Light Mode"
+                            } else {
+                                "Dark Mode"
+                            })
+                            .clicked()
+                        {
+                            self.toggle_dark_mode();
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                        ui.checkbox(&mut self.auto_save_enabled, "Auto-save");
+                        ui.checkbox(&mut self.spellcheck_enabled, "Spell Check");
+                    });
+
+                    // Right-aligned current note with save button
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if self.selected_note.is_some() {
-                            self.show_markdown_preview = !self.show_markdown_preview;
-                        }
-                        ui.close_menu();
-                    }
-                    if ui.button("🔗 Links Panel").clicked() {
-                        self.show_links_panel = !self.show_links_panel;
-                        ui.close_menu();
-                    }
-                    if ui.button("⭐ Favorites").clicked() {
-                        self.show_favorites = !self.show_favorites;
-                        ui.close_menu();
-                    }
-                    if ui.button("📊 Statistics").clicked() {
-                        self.show_statistics = !self.show_statistics;
-                        ui.close_menu();
-                    }
-                });
+                            if ui.small_button("💾 Save").clicked() {
+                                self.save_current_note();
+                            }
 
-                // Tools menu
-                ui.menu_button("🛠 Tools", |ui| {
-                    if ui.button("🏷 Tag Manager").clicked() {
-                        self.show_tag_dialog = true;
-                        ui.close_menu();
-                    }
-                    if ui.button("🔐 Encrypt/Decrypt (Ctrl+E)").clicked() {
-                        self.show_encryption_dialog = true;
-                        ui.close_menu();
-                    }
-                    if ui.button("📄 Export...").clicked() {
-                        self.show_export_dialog = true;
-                        ui.close_menu();
-                    }
-                    if ui.button("📚 Version History").clicked() {
-                        self.load_version_history();
-                        self.show_version_history = true;
-                        ui.close_menu();
-                    }
-                });
-
-                // Settings menu
-                ui.menu_button("⚙ Settings", |ui| {
-                    if ui.button("🎨 Theme").clicked() {
-                        self.show_theme_dialog = true;
-                        ui.close_menu();
-                    }
-                    if ui
-                        .button(if self.theme_manager.current_theme.is_dark {
-                            "☀ Light Mode"
-                        } else {
-                            "🌙 Dark Mode"
-                        })
-                        .clicked()
-                    {
-                        self.toggle_dark_mode();
-                        ui.close_menu();
-                    }
-                    ui.separator();
-                    if ui
-                        .checkbox(&mut self.auto_save_enabled, "💾 Auto-save")
-                        .changed()
-                    {
-                        println!("Auto-save: {}", self.auto_save_enabled);
-                    }
-                    if ui
-                        .checkbox(&mut self.autocomplete_enabled, "✨ Autocomplete")
-                        .changed()
-                    {
-                        self.autocomplete.set_enabled(self.autocomplete_enabled);
-                        println!("Autocomplete: {}", self.autocomplete_enabled);
-                    }
-                    if ui
-                        .checkbox(&mut self.spellcheck_enabled, "✓ Spell Check")
-                        .changed()
-                    {
-                        self.spellcheck.set_enabled(self.spellcheck_enabled);
-                        println!("Spell Check: {}", self.spellcheck_enabled);
-                    }
-                });
-
-                // Current note indicator
-                if let (Some(folder_idx), Some(note_idx)) =
-                    (self.selected_folder, self.selected_note)
-                {
-                    let storage = self.storage.lock().unwrap();
-                    if let Some(folder) = storage.folders.get(folder_idx) {
-                        if let Some(note) = folder.notes.get(note_idx) {
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if note.is_encrypted {
-                                        ui.label("🔒");
+                            if let (Some(folder_idx), Some(note_idx)) =
+                                (self.selected_folder, self.selected_note)
+                            {
+                                let storage = self.storage.lock().unwrap();
+                                if let Some(folder) = storage.folders.get(folder_idx) {
+                                    if let Some(note) = folder.notes.get(note_idx) {
+                                        ui.add_space(8.0);
+                                        let mut title_text = note.title.clone();
+                                        if note.is_encrypted {
+                                            title_text = format!("🔒 {}", title_text);
+                                        }
+                                        if self.is_favorite() {
+                                            title_text = format!("⭐ {}", title_text);
+                                        }
+                                        ui.label(title_text);
                                     }
-                                    if self.is_favorite() {
-                                        ui.label("⭐");
-                                    }
-                                    ui.label(format!("📝 {}", note.title));
-                                },
-                            );
+                                }
+                            }
                         }
-                    }
-                }
+                    });
+                });
             });
-        });
 
         // Rest of the UI remains the same but continues in sidebar and central panel
         if self.sidebar_open {
@@ -829,16 +775,28 @@ impl NoteTakingApp {
     fn render_sidebar(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("sidebar")
             .resizable(true)
-            .default_width(250.0)
+            .default_width(220.0)
+            .frame(
+                egui::Frame::none()
+                    .inner_margin(egui::Margin::same(12.0))
+                    .fill(egui::Color32::from_gray(25)),
+            ) // Slightly lighter dark gray
             .show(ctx, |ui| {
-                ui.heading("📚 Library");
-                ui.separator();
+                // Set text color to be clearly visible
+                ui.style_mut().visuals.override_text_color = Some(egui::Color32::from_gray(220));
+
+                ui.heading("Notes");
+                ui.add_space(8.0);
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     // Show search results if searching
                     if !self.search_query.is_empty() && !self.search_results.is_empty() {
-                        ui.label("🔍 Search Results:");
-                        ui.separator();
+                        ui.label(
+                            egui::RichText::new("Search Results")
+                                .strong()
+                                .color(egui::Color32::from_gray(200)),
+                        );
+                        ui.add_space(4.0);
 
                         let search_display: Vec<_> = {
                             let storage = self.storage.lock().unwrap();
@@ -850,7 +808,8 @@ impl NoteTakingApp {
                                             (
                                                 *folder_idx,
                                                 *note_idx,
-                                                format!("📄 {} (in {})", note.title, folder.name),
+                                                note.title.clone(),
+                                                folder.name.clone(),
                                                 note.content.clone(),
                                             )
                                         })
@@ -859,12 +818,15 @@ impl NoteTakingApp {
                                 .collect()
                         };
 
-                        for (folder_idx, note_idx, label, content) in search_display {
+                        for (folder_idx, note_idx, title, folder_name, content) in search_display {
+                            let is_selected = self.selected_folder == Some(folder_idx)
+                                && self.selected_note == Some(note_idx);
+
                             if ui
                                 .selectable_label(
-                                    self.selected_folder == Some(folder_idx)
-                                        && self.selected_note == Some(note_idx),
-                                    label,
+                                    is_selected,
+                                    egui::RichText::new(&title)
+                                        .color(egui::Color32::from_gray(220)),
                                 )
                                 .clicked()
                             {
@@ -873,16 +835,27 @@ impl NoteTakingApp {
                                 self.selected_note = Some(note_idx);
                                 self.current_note_content = content.clone();
 
-                                // Run spell check on newly loaded content
                                 if self.spellcheck_enabled {
                                     self.misspelled_words = self.spellcheck.check_text(&content);
                                 }
                             }
+                            ui.label(
+                                egui::RichText::new(&folder_name)
+                                    .small()
+                                    .color(egui::Color32::from_gray(150)),
+                            );
+                            ui.add_space(4.0);
                         }
 
+                        ui.add_space(8.0);
                         ui.separator();
-                        ui.label("📁 All Notes:");
-                        ui.separator();
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new("All Notes")
+                                .strong()
+                                .color(egui::Color32::from_gray(200)),
+                        );
+                        ui.add_space(4.0);
                     }
 
                     // Show folder tree
@@ -919,49 +892,53 @@ impl NoteTakingApp {
 
         for (folder_idx, folder_name, notes) in folders_display {
             let is_selected = self.selected_folder == Some(folder_idx);
-            let folder_label = if is_selected {
-                format!("📁 {} ✓", folder_name)
-            } else {
-                format!("📁 {}", folder_name)
-            };
 
-            let header_response = ui.collapsing(&folder_label, |ui| {
-                if notes.is_empty() {
-                    ui.label("(No notes yet)");
-                }
-                for (note_idx, title, content, is_encrypted) in notes {
-                    let label = if is_encrypted {
-                        format!("🔒 {}", title)
-                    } else {
-                        title.clone()
-                    };
+            let header_response = ui.collapsing(
+                egui::RichText::new(&folder_name)
+                    .strong()
+                    .color(egui::Color32::from_gray(230)),
+                |ui| {
+                    if notes.is_empty() {
+                        ui.label(
+                            egui::RichText::new("No notes")
+                                .color(egui::Color32::from_gray(140))
+                                .small(),
+                        );
+                    }
+                    for (note_idx, title, content, is_encrypted) in notes {
+                        let mut label_text = title.clone();
+                        if is_encrypted {
+                            label_text = format!("🔒 {}", label_text);
+                        }
 
-                    if ui
-                        .selectable_label(
-                            self.selected_folder == Some(folder_idx)
-                                && self.selected_note == Some(note_idx),
-                            label,
-                        )
-                        .clicked()
-                    {
-                        self.save_current_note();
-                        self.selected_folder = Some(folder_idx);
-                        self.selected_note = Some(note_idx);
-                        self.current_note_content = content.clone();
+                        let is_note_selected = self.selected_folder == Some(folder_idx)
+                            && self.selected_note == Some(note_idx);
 
-                        // Run spell check on newly loaded content
-                        if self.spellcheck_enabled {
-                            self.misspelled_words = self.spellcheck.check_text(&content);
+                        // Create colored text for better visibility
+                        let note_label =
+                            egui::RichText::new(&label_text).color(egui::Color32::from_gray(210));
+
+                        if ui.selectable_label(is_note_selected, note_label).clicked() {
+                            self.save_current_note();
+                            self.selected_folder = Some(folder_idx);
+                            self.selected_note = Some(note_idx);
+                            self.current_note_content = content.clone();
+
+                            if self.spellcheck_enabled {
+                                self.misspelled_words = self.spellcheck.check_text(&content);
+                            }
                         }
                     }
-                }
-            });
+                },
+            );
 
             if header_response.header_response.clicked() {
                 self.selected_folder = Some(folder_idx);
                 self.selected_note = None;
                 self.current_note_content.clear();
             }
+
+            ui.add_space(4.0);
         }
     }
 
@@ -991,96 +968,23 @@ impl NoteTakingApp {
         };
 
         if let Some((title, created_at, updated_at, is_encrypted)) = note_data {
-            // Header with title and controls
-            ui.horizontal(|ui| {
-                ui.heading(&title);
-
-                ui.add_space(10.0);
-
-                // Status indicators
-                if is_encrypted {
-                    ui.label("🔒");
-                }
-                if self.is_favorite() {
-                    ui.label("⭐");
-                }
-
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    // Preview toggle button
-                    if ui
-                        .button(if self.show_markdown_preview {
-                            "📝 Edit"
-                        } else {
-                            "👁 Preview"
-                        })
-                        .clicked()
-                    {
-                        self.show_markdown_preview = !self.show_markdown_preview;
-                        if !self.show_markdown_preview {
-                            // Switching back to edit mode, save first
-                            self.save_current_note();
-                        }
-                    }
-
-                    // Save button (always visible for manual saves)
-                    if ui.button("💾 Save").clicked() {
-                        self.save_current_note();
-                    }
-
-                    // Auto-save indicator
-                    if self.auto_save_enabled {
-                        let elapsed = self.last_save_time.elapsed().as_secs_f32();
-                        let time_until_save = self.auto_save_interval - elapsed;
-                        if time_until_save > 0.0 {
-                            ui.label(format!("⏱ Auto-save in {}s", time_until_save.ceil() as i32));
-                        } else {
-                            ui.label("✓ Auto-saved");
-                        }
-                    }
-                });
-            });
-
-            ui.separator();
-
-            // Metadata
-            ui.horizontal(|ui| {
-                ui.label(format!("Created: {}", created_at));
-                ui.separator();
-                ui.label(format!("Updated: {}", updated_at));
-            });
-
-            ui.separator();
+            // Minimal header - just title
+            ui.add_space(8.0);
 
             // Main editor area - seamlessly editable or preview
             egui::ScrollArea::vertical().show(ui, |ui| {
                 if self.show_markdown_preview {
-                    // Preview mode - read-only markdown rendering
-                    ui.horizontal(|ui| {
-                        ui.label("📖 Preview Mode");
-                        ui.label("(Click 'Edit' to modify)");
-                    });
-                    ui.separator();
-
+                    // Clean preview mode
                     egui_commonmark::CommonMarkViewer::new().show(
                         ui,
                         &mut egui_commonmark::CommonMarkCache::default(),
                         &self.current_note_content,
                     );
                 } else {
-                    // Edit mode - always editable, auto-saves
-                    ui.horizontal(|ui| {
-                        ui.label("✏️ Edit Mode");
-                        if self.auto_save_enabled {
-                            ui.label("(Auto-saving every 30s)");
-                        } else {
-                            ui.label("(Remember to save manually)");
-                        }
-                    });
-                    ui.separator();
-
+                    // Clean edit mode
                     let text_edit = egui::TextEdit::multiline(&mut self.current_note_content)
                         .desired_width(f32::INFINITY)
-                        .desired_rows(30)
+                        .desired_rows(35)
                         .font(egui::TextStyle::Monospace);
 
                     let response = ui.add(text_edit);
@@ -1091,69 +995,29 @@ impl NoteTakingApp {
                             self.spellcheck.check_text(&self.current_note_content);
                     }
 
-                    // Show spell check results
+                    // Minimal spell check indicator at bottom
                     if self.spellcheck_enabled && !self.misspelled_words.is_empty() {
-                        ui.separator();
-                        ui.collapsing("⚠️ Spelling Issues", |ui| {
-                            ui.label(format!(
-                                "Found {} potential issue{}",
-                                self.misspelled_words.len(),
-                                if self.misspelled_words.len() == 1 {
-                                    ""
-                                } else {
-                                    "s"
-                                }
-                            ));
-                            ui.separator();
-
-                            // Clone to avoid borrow issues
-                            let words_to_check: Vec<_> = self
-                                .misspelled_words
-                                .iter()
-                                .map(|(_, _, word)| word.clone())
-                                .collect();
-
-                            for word in words_to_check.iter().take(10) {
-                                ui.horizontal(|ui| {
-                                    ui.label("•");
-                                    ui.colored_label(egui::Color32::from_rgb(255, 100, 100), word);
-
-                                    // Get suggestions
-                                    let suggestions = self.spellcheck.suggest(word);
-                                    if !suggestions.is_empty() {
-                                        ui.label("→");
-                                        ui.label(format!(
-                                            "Did you mean: {}?",
-                                            suggestions.join(", ")
-                                        ));
+                        ui.add_space(8.0);
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "⚠ {} spelling issue{}",
+                                    self.misspelled_words.len(),
+                                    if self.misspelled_words.len() == 1 {
+                                        ""
+                                    } else {
+                                        "s"
                                     }
+                                ))
+                                .small()
+                                .weak(),
+                            );
 
-                                    if ui.small_button("+ Add to dictionary").clicked() {
-                                        self.spellcheck.add_to_dictionary(word.clone());
-                                        self.misspelled_words =
-                                            self.spellcheck.check_text(&self.current_note_content);
-                                    }
-                                });
-                            }
-
-                            if self.misspelled_words.len() > 10 {
-                                ui.label(format!(
-                                    "... and {} more",
-                                    self.misspelled_words.len() - 10
-                                ));
+                            if ui.small_button("View").clicked() {
+                                // Will expand below
                             }
                         });
                     }
-
-                    // Show helpful hints at the bottom
-                    ui.separator();
-                    ui.horizontal(|ui| {
-                        ui.label("💡 Tips:");
-                        ui.label("• Just start typing!");
-                        ui.label("• Use Markdown: **bold**, *italic*, # headers");
-                        ui.label("• Link notes: [[Note Name]]");
-                        ui.label("• Toggle preview to see formatted text");
-                    });
                 }
             });
         }
@@ -1161,77 +1025,15 @@ impl NoteTakingApp {
 
     fn render_welcome_screen(&self, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| {
-            ui.add_space(100.0);
+            ui.add_space(150.0);
 
-            // Main heading
-            ui.heading("📝 Enhanced Notetaking App");
+            ui.heading("Notes");
             ui.add_space(20.0);
 
-            // Quick start instructions
-            ui.label("🚀 Quick Start:");
+            ui.label("Create a folder to get started");
             ui.add_space(10.0);
 
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = 20.0;
-                ui.label("1️⃣ Click 'File' → 'New Folder'");
-                ui.label("2️⃣ Click the folder to select it");
-                ui.label("3️⃣ Click 'File' → 'New Note'");
-            });
-
-            ui.add_space(20.0);
-            ui.label("4️⃣ Click the note and start typing immediately!");
-
-            ui.add_space(40.0);
-            ui.separator();
-            ui.add_space(20.0);
-
-            // Feature highlights
-            ui.label("✨ Key Features:");
-            ui.add_space(10.0);
-
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = 15.0;
-                ui.label("🎨 7 Themes");
-                ui.label("🏷️ Smart Tags");
-                ui.label("🔐 Encryption");
-                ui.label("📄 PDF Export");
-                ui.label("⭐ Favorites");
-            });
-
-            ui.add_space(10.0);
-
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = 15.0;
-                ui.label("📚 Version History");
-                ui.label("👁️ Markdown Preview");
-                ui.label("💾 Auto-Save");
-                ui.label("🔗 Note Linking");
-                ui.label("📊 Statistics");
-            });
-
-            ui.add_space(40.0);
-            ui.separator();
-            ui.add_space(20.0);
-
-            // Pro tips
-            ui.label("💡 Pro Tips:");
-            ui.add_space(10.0);
-
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = 10.0;
-                ui.label("• No 'Edit' button needed - just click and type!");
-                ui.label("• Auto-saves every 30 seconds");
-                ui.label("• Use **bold** and *italic* in Markdown");
-            });
-
-            ui.add_space(10.0);
-
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = 10.0;
-                ui.label("• Link notes with [[Note Name]]");
-                ui.label("• Press '👁 Preview' to see formatted text");
-                ui.label("• Change themes in Settings menu");
-            });
+            ui.label(egui::RichText::new("Click '+ Folder' above").small().weak());
         });
     }
 
