@@ -1,1 +1,1 @@
-[ENCRYPTED - Enter password to decrypt]
+[ENCRYPTED - Enter password to decrypt
