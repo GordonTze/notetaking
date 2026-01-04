@@ -912,8 +912,6 @@ impl NoteTakingApp {
         };
 
         for (folder_idx, folder_name, notes) in folders_display {
-            let is_selected = self.selected_folder == Some(folder_idx);
-
             let header_response = ui.collapsing(
                 egui::RichText::new(&folder_name)
                     .strong()
@@ -1002,7 +1000,7 @@ impl NoteTakingApp {
                         &self.current_note_content,
                     );
                 } else {
-                    // Clean edit mode
+                    // Clean edit mode with spell check underlines
                     let text_edit = egui::TextEdit::multiline(&mut self.current_note_content)
                         .desired_width(f32::INFINITY)
                         .desired_rows(35)
@@ -1010,13 +1008,92 @@ impl NoteTakingApp {
 
                     let response = ui.add(text_edit);
 
+                    // Draw red underlines for misspelled words using proper text layout
+                    if self.spellcheck_enabled
+                        && !self.misspelled_words.is_empty()
+                        && response.rect.width() > 0.0
+                    {
+                        let painter = ui.painter();
+                        let rect = response.rect;
+
+                        // Get the font
+                        let font_id = egui::TextStyle::Monospace.resolve(ui.style());
+
+                        // Create a layout job for accurate positioning
+                        let text = &self.current_note_content;
+                        let job = egui::text::LayoutJob::single_section(
+                            text.clone(),
+                            egui::TextFormat {
+                                font_id: font_id.clone(),
+                                color: ui.style().visuals.text_color(),
+                                ..Default::default()
+                            },
+                        );
+
+                        // Layout the text to get accurate positions
+                        let galley = ui.fonts(|f| f.layout_job(job));
+
+                        // Draw underlines for each misspelled word
+                        for (start, end, _word) in &self.misspelled_words {
+                            if *start < text.len() && *end <= text.len() {
+                                // Get cursor positions for start and end
+                                let cursor_start =
+                                    galley.from_ccursor(egui::text::CCursor::new(*start));
+                                let cursor_end =
+                                    galley.from_ccursor(egui::text::CCursor::new(*end));
+
+                                // Get the row rect for this line
+                                let row = cursor_start.rcursor.row;
+                                if row < galley.rows.len() {
+                                    let row_rect = galley.rows[row].rect;
+
+                                    // Calculate screen positions
+                                    let start_pos = egui::pos2(
+                                        rect.min.x + cursor_start.rcursor.column as f32 + 4.0,
+                                        rect.min.y + row_rect.max.y + 4.0,
+                                    );
+
+                                    let end_pos = egui::pos2(
+                                        rect.min.x + cursor_end.rcursor.column as f32 + 4.0,
+                                        rect.min.y + row_rect.max.y + 4.0,
+                                    );
+
+                                    // Draw wavy underline
+                                    let word_width = end_pos.x - start_pos.x;
+                                    if word_width > 0.0 {
+                                        let num_waves = ((word_width / 4.0) as usize).max(1);
+
+                                        for i in 0..num_waves {
+                                            let x1 = start_pos.x
+                                                + (i as f32 * word_width / num_waves as f32);
+                                            let x2 = start_pos.x
+                                                + ((i + 1) as f32 * word_width / num_waves as f32);
+                                            let y1 =
+                                                start_pos.y + if i % 2 == 0 { 0.0 } else { 2.0 };
+                                            let y2 =
+                                                start_pos.y + if i % 2 == 0 { 2.0 } else { 0.0 };
+
+                                            painter.line_segment(
+                                                [egui::pos2(x1, y1), egui::pos2(x2, y2)],
+                                                egui::Stroke::new(
+                                                    1.5,
+                                                    egui::Color32::from_rgb(255, 80, 80),
+                                                ),
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Check for content changes to trigger spell check
                     if response.changed() && self.spellcheck_enabled {
                         self.misspelled_words =
                             self.spellcheck.check_text(&self.current_note_content);
                     }
 
-                    // Minimal spell check indicator at bottom
+                    // Minimal spell check summary at bottom
                     if self.spellcheck_enabled && !self.misspelled_words.is_empty() {
                         ui.add_space(8.0);
                         ui.horizontal(|ui| {
@@ -1031,11 +1108,31 @@ impl NoteTakingApp {
                                     }
                                 ))
                                 .small()
-                                .weak(),
+                                .color(egui::Color32::from_rgb(255, 150, 100)),
                             );
 
-                            if ui.small_button("View").clicked() {
-                                // Will expand below
+                            // Show first few misspelled words
+                            let display_words: Vec<String> = self
+                                .misspelled_words
+                                .iter()
+                                .take(3)
+                                .map(|(_, _, word)| word.clone())
+                                .collect();
+
+                            if !display_words.is_empty() {
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "({}{})",
+                                        display_words.join(", "),
+                                        if self.misspelled_words.len() > 3 {
+                                            "..."
+                                        } else {
+                                            ""
+                                        }
+                                    ))
+                                    .small()
+                                    .weak(),
+                                );
                             }
                         });
                     }
