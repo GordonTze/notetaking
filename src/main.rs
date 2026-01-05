@@ -1000,7 +1000,7 @@ impl NoteTakingApp {
                         &self.current_note_content,
                     );
                 } else {
-                    // Clean edit mode with spell check underlines
+                    // Clean edit mode
                     let text_edit = egui::TextEdit::multiline(&mut self.current_note_content)
                         .desired_width(f32::INFINITY)
                         .desired_rows(35)
@@ -1008,80 +1008,83 @@ impl NoteTakingApp {
 
                     let response = ui.add(text_edit);
 
-                    // Draw red underlines for misspelled words using proper text layout
-                    if self.spellcheck_enabled
-                        && !self.misspelled_words.is_empty()
-                        && response.rect.width() > 0.0
-                    {
+                    // Draw red underlines for misspelled words
+                    if self.spellcheck_enabled && !self.misspelled_words.is_empty() {
                         let painter = ui.painter();
                         let rect = response.rect;
 
-                        // Get the font
+                        // Get font metrics
                         let font_id = egui::TextStyle::Monospace.resolve(ui.style());
+                        let row_height = ui.fonts(|f| f.row_height(&font_id));
 
-                        // Create a layout job for accurate positioning
                         let text = &self.current_note_content;
-                        let job = egui::text::LayoutJob::single_section(
-                            text.clone(),
-                            egui::TextFormat {
-                                font_id: font_id.clone(),
-                                color: ui.style().visuals.text_color(),
-                                ..Default::default()
-                            },
-                        );
 
-                        // Layout the text to get accurate positions
-                        let galley = ui.fonts(|f| f.layout_job(job));
-
-                        // Draw underlines for each misspelled word
-                        for (start, end, _word) in &self.misspelled_words {
+                        for (start, end, word) in &self.misspelled_words {
                             if *start < text.len() && *end <= text.len() {
-                                // Get cursor positions for start and end
-                                let cursor_start =
-                                    galley.from_ccursor(egui::text::CCursor::new(*start));
-                                let cursor_end =
-                                    galley.from_ccursor(egui::text::CCursor::new(*end));
+                                // Calculate which line this word is on
+                                let text_before = &text[..*start];
+                                let line_num = text_before.matches('\n').count();
 
-                                // Get the row rect for this line
-                                let row = cursor_start.rcursor.row;
-                                if row < galley.rows.len() {
-                                    let row_rect = galley.rows[row].rect;
+                                // Find the start of this line
+                                let line_start =
+                                    text_before.rfind('\n').map(|i| i + 1).unwrap_or(0);
+                                let line_end = text[*start..]
+                                    .find('\n')
+                                    .map(|i| *start + i)
+                                    .unwrap_or(text.len());
+                                let line_text = &text[line_start..line_end];
 
-                                    // Calculate screen positions
-                                    let start_pos = egui::pos2(
-                                        rect.min.x + cursor_start.rcursor.column as f32 + 4.0,
-                                        rect.min.y + row_rect.max.y + 4.0,
+                                // Calculate column position (characters from line start)
+                                let col = start - line_start;
+
+                                // Measure text width up to this point on the line
+                                let text_before_word = &line_text[..col.min(line_text.len())];
+                                let x_offset = ui.fonts(|f| {
+                                    f.layout_no_wrap(
+                                        text_before_word.to_string(),
+                                        font_id.clone(),
+                                        egui::Color32::WHITE,
+                                    )
+                                    .rect
+                                    .width()
+                                });
+
+                                // Measure the word width
+                                let word_width = ui.fonts(|f| {
+                                    f.layout_no_wrap(
+                                        word.clone(),
+                                        font_id.clone(),
+                                        egui::Color32::WHITE,
+                                    )
+                                    .rect
+                                    .width()
+                                });
+
+                                // Calculate underline position
+                                let underline_start_x = rect.min.x + 6.0 + x_offset;
+                                let underline_end_x = underline_start_x + word_width;
+                                let underline_y =
+                                    rect.min.y + 6.0 + (line_num as f32 * row_height) + row_height
+                                        - 2.0;
+
+                                // Draw wavy underline
+                                let num_waves = ((word_width / 4.0) as usize).max(2);
+
+                                for i in 0..num_waves {
+                                    let x1 = underline_start_x
+                                        + (i as f32 * word_width / num_waves as f32);
+                                    let x2 = underline_start_x
+                                        + ((i + 1) as f32 * word_width / num_waves as f32);
+                                    let y1 = underline_y + if i % 2 == 0 { 0.0 } else { 1.0 };
+                                    let y2 = underline_y + if i % 2 == 0 { 1.0 } else { 0.0 };
+
+                                    painter.line_segment(
+                                        [egui::pos2(x1, y1), egui::pos2(x2, y2)],
+                                        egui::Stroke::new(
+                                            1.0,
+                                            egui::Color32::from_rgb(255, 80, 80),
+                                        ),
                                     );
-
-                                    let end_pos = egui::pos2(
-                                        rect.min.x + cursor_end.rcursor.column as f32 + 4.0,
-                                        rect.min.y + row_rect.max.y + 4.0,
-                                    );
-
-                                    // Draw wavy underline
-                                    let word_width = end_pos.x - start_pos.x;
-                                    if word_width > 0.0 {
-                                        let num_waves = ((word_width / 4.0) as usize).max(1);
-
-                                        for i in 0..num_waves {
-                                            let x1 = start_pos.x
-                                                + (i as f32 * word_width / num_waves as f32);
-                                            let x2 = start_pos.x
-                                                + ((i + 1) as f32 * word_width / num_waves as f32);
-                                            let y1 =
-                                                start_pos.y + if i % 2 == 0 { 0.0 } else { 2.0 };
-                                            let y2 =
-                                                start_pos.y + if i % 2 == 0 { 2.0 } else { 0.0 };
-
-                                            painter.line_segment(
-                                                [egui::pos2(x1, y1), egui::pos2(x2, y2)],
-                                                egui::Stroke::new(
-                                                    1.5,
-                                                    egui::Color32::from_rgb(255, 80, 80),
-                                                ),
-                                            );
-                                        }
-                                    }
                                 }
                             }
                         }
