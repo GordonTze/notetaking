@@ -26,6 +26,39 @@ use tags::TagManager;
 use theme::ThemeManager;
 use version_control::VersionControl;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum EditorFont {
+    Monospace,
+    Proportional,
+    SansSerif,
+}
+
+impl EditorFont {
+    fn name(&self) -> &str {
+        match self {
+            EditorFont::Monospace => "Monospace",
+            EditorFont::Proportional => "Proportional",
+            EditorFont::SansSerif => "Sans Serif",
+        }
+    }
+
+    fn all() -> Vec<EditorFont> {
+        vec![
+            EditorFont::Monospace,
+            EditorFont::Proportional,
+            EditorFont::SansSerif,
+        ]
+    }
+
+    fn to_text_style(&self) -> egui::TextStyle {
+        match self {
+            EditorFont::Monospace => egui::TextStyle::Monospace,
+            EditorFont::Proportional => egui::TextStyle::Body,
+            EditorFont::SansSerif => egui::TextStyle::Body,
+        }
+    }
+}
+
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -113,6 +146,11 @@ struct NoteTakingApp {
     last_save_time: std::time::Instant,
     autocomplete_enabled: bool,
     spellcheck_enabled: bool,
+
+    // Font and zoom settings
+    current_font: EditorFont,
+    font_size: f32,
+    zoom_level: f32, // 1.0 = 100%, 1.5 = 150%, etc.
 
     // Autocomplete state
     autocomplete_suggestions: Vec<String>,
@@ -211,6 +249,9 @@ impl NoteTakingApp {
             misspelled_words: Vec::new(),
             favorite_notes: Vec::new(),
             show_favorites: false,
+            current_font: EditorFont::Monospace,
+            font_size: 14.0,
+            zoom_level: 1.0,
         }
     }
 
@@ -637,6 +678,21 @@ impl eframe::App for NoteTakingApp {
                     self.show_encryption_dialog = true;
                 }
             }
+
+            // Ctrl/Cmd + Plus/Equals to zoom in
+            if i.modifiers.command && i.key_pressed(egui::Key::Plus) {
+                self.zoom_level = (self.zoom_level + 0.1).min(3.0);
+            }
+
+            // Ctrl/Cmd + Minus to zoom out
+            if i.modifiers.command && i.key_pressed(egui::Key::Minus) {
+                self.zoom_level = (self.zoom_level - 0.1).max(0.5);
+            }
+
+            // Ctrl/Cmd + 0 to reset zoom
+            if i.modifiers.command && i.key_pressed(egui::Key::Num0) {
+                self.zoom_level = 1.0;
+            }
         });
 
         // Minimalist top panel
@@ -746,6 +802,39 @@ impl eframe::App for NoteTakingApp {
                             self.toggle_dark_mode();
                             ui.close_menu();
                         }
+                        ui.separator();
+
+                        // Font selection
+                        ui.label("Font:");
+                        for font in EditorFont::all() {
+                            let is_current = font == self.current_font;
+                            let text = if is_current {
+                                format!("✓ {}", font.name())
+                            } else {
+                                font.name().to_string()
+                            };
+                            if ui.button(text).clicked() {
+                                self.current_font = font;
+                            }
+                        }
+
+                        ui.separator();
+
+                        // Zoom controls
+                        ui.label("Zoom:");
+                        ui.horizontal(|ui| {
+                            if ui.button("−").clicked() {
+                                self.zoom_level = (self.zoom_level - 0.1).max(0.5);
+                            }
+                            ui.label(format!("{}%", (self.zoom_level * 100.0) as i32));
+                            if ui.button("+").clicked() {
+                                self.zoom_level = (self.zoom_level + 0.1).min(3.0);
+                            }
+                            if ui.button("Reset").clicked() {
+                                self.zoom_level = 1.0;
+                            }
+                        });
+
                         ui.separator();
                         ui.checkbox(&mut self.auto_save_enabled, "Auto-save");
                         ui.checkbox(&mut self.spellcheck_enabled, "Spell Check");
@@ -1001,10 +1090,12 @@ impl NoteTakingApp {
                     );
                 } else {
                     // Clean edit mode
+                    let actual_font_size = self.font_size * self.zoom_level;
+
                     let text_edit = egui::TextEdit::multiline(&mut self.current_note_content)
                         .desired_width(f32::INFINITY)
                         .desired_rows(35)
-                        .font(egui::TextStyle::Monospace);
+                        .font(self.current_font.to_text_style());
 
                     let response = ui.add(text_edit);
 
@@ -1013,9 +1104,9 @@ impl NoteTakingApp {
                         let painter = ui.painter();
                         let rect = response.rect;
 
-                        // Get font metrics
-                        let font_id = egui::TextStyle::Monospace.resolve(ui.style());
-                        let row_height = ui.fonts(|f| f.row_height(&font_id));
+                        // Get font metrics with current zoom
+                        let font_id = self.current_font.to_text_style().resolve(ui.style());
+                        let row_height = ui.fonts(|f| f.row_height(&font_id)) * self.zoom_level;
 
                         let text = &self.current_note_content;
 
