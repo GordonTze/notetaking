@@ -823,14 +823,14 @@ impl eframe::App for NoteTakingApp {
                         // Zoom controls
                         ui.label("Zoom:");
                         ui.horizontal(|ui| {
-                            if ui.button("−").clicked() {
+                            if ui.button("🔍−").clicked() {
                                 self.zoom_level = (self.zoom_level - 0.1).max(0.5);
                             }
                             ui.label(format!("{}%", (self.zoom_level * 100.0) as i32));
-                            if ui.button("+").clicked() {
+                            if ui.button("🔍+").clicked() {
                                 self.zoom_level = (self.zoom_level + 0.1).min(3.0);
                             }
-                            if ui.button("Reset").clicked() {
+                            if ui.button("↺ Reset").clicked() {
                                 self.zoom_level = 1.0;
                             }
                         });
@@ -839,6 +839,28 @@ impl eframe::App for NoteTakingApp {
                         ui.checkbox(&mut self.auto_save_enabled, "Auto-save");
                         ui.checkbox(&mut self.spellcheck_enabled, "Spell Check");
                     });
+
+                    ui.separator();
+
+                    // Quick zoom controls in top bar
+                    if ui
+                        .small_button("🔍−")
+                        .on_hover_text("Zoom out (Ctrl+−)")
+                        .clicked()
+                    {
+                        self.zoom_level = (self.zoom_level - 0.1).max(0.5);
+                    }
+                    ui.label(
+                        egui::RichText::new(format!("{}%", (self.zoom_level * 100.0) as i32))
+                            .small(),
+                    );
+                    if ui
+                        .small_button("🔍+")
+                        .on_hover_text("Zoom in (Ctrl++)")
+                        .clicked()
+                    {
+                        self.zoom_level = (self.zoom_level + 0.1).min(3.0);
+                    }
 
                     // Right-aligned current note with save button
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
