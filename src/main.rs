@@ -382,6 +382,62 @@ impl NoteTakingApp {
         }
     }
 
+    fn delete_current_note(&mut self) {
+        if let (Some(folder_idx), Some(note_idx)) = (self.selected_folder, self.selected_note) {
+            let mut storage = self.storage.lock().unwrap();
+            if let Some(folder) = storage.folders.get_mut(folder_idx) {
+                if note_idx < folder.notes.len() {
+                    let note = &folder.notes[note_idx];
+                    // Delete the note file
+                    if let Ok(_) = std::fs::remove_file(&note.file_path) {
+                        // Delete metadata file
+                        let meta_path =
+                            std::path::Path::new(&note.file_path).with_extension("meta");
+                        let _ = std::fs::remove_file(meta_path);
+
+                        // Remove from folder
+                        folder.notes.remove(note_idx);
+
+                        // Clear selection
+                        self.selected_note = None;
+                        self.current_note_content.clear();
+
+                        println!("✓ Note deleted");
+                    }
+                }
+            }
+        }
+    }
+
+    fn delete_current_folder(&mut self) {
+        if let Some(folder_idx) = self.selected_folder {
+            let mut storage = self.storage.lock().unwrap();
+            if folder_idx < storage.folders.len() {
+                let folder = &storage.folders[folder_idx];
+
+                // Delete all notes in the folder
+                for note in &folder.notes {
+                    let _ = std::fs::remove_file(&note.file_path);
+                    let meta_path = std::path::Path::new(&note.file_path).with_extension("meta");
+                    let _ = std::fs::remove_file(meta_path);
+                }
+
+                // Delete the folder directory
+                let _ = std::fs::remove_dir_all(&folder.path);
+
+                // Remove from storage
+                storage.folders.remove(folder_idx);
+
+                // Clear selection
+                self.selected_folder = None;
+                self.selected_note = None;
+                self.current_note_content.clear();
+
+                println!("✓ Folder deleted");
+            }
+        }
+    }
+
     fn sync_to_cloud(&mut self) {
         let storage = self.storage.lock().unwrap();
         match storage.export_to_cloud() {
@@ -819,23 +875,6 @@ impl eframe::App for NoteTakingApp {
                         }
 
                         ui.separator();
-
-                        // Zoom controls
-                        ui.label("Zoom:");
-                        ui.horizontal(|ui| {
-                            if ui.button("🔍−").clicked() {
-                                self.zoom_level = (self.zoom_level - 0.1).max(0.5);
-                            }
-                            ui.label(format!("{}%", (self.zoom_level * 100.0) as i32));
-                            if ui.button("🔍+").clicked() {
-                                self.zoom_level = (self.zoom_level + 0.1).min(3.0);
-                            }
-                            if ui.button("↺ Reset").clicked() {
-                                self.zoom_level = 1.0;
-                            }
-                        });
-
-                        ui.separator();
                         ui.checkbox(&mut self.auto_save_enabled, "Auto-save");
                         ui.checkbox(&mut self.spellcheck_enabled, "Spell Check");
                     });
@@ -884,6 +923,29 @@ impl eframe::App for NoteTakingApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
+                    // Delete buttons
+                    if let Some(folder_idx) = self.selected_folder {
+                        if self.selected_note.is_some() {
+                            if ui
+                                .small_button("🗑 Delete Note")
+                                .on_hover_text("Delete current note")
+                                .clicked()
+                            {
+                                self.delete_current_note();
+                            }
+                            ui.separator();
+                        }
+                        if ui
+                            .small_button("🗑 Delete Folder")
+                            .on_hover_text("Delete current folder and all its notes")
+                            .clicked()
+                        {
+                            self.delete_current_folder();
+                        }
+                        ui.separator();
+                    }
+
+                    // Zoom controls
                     ui.label(egui::RichText::new("Zoom:").weak().small());
                     if ui
                         .small_button("🔍−")
