@@ -840,28 +840,6 @@ impl eframe::App for NoteTakingApp {
                         ui.checkbox(&mut self.spellcheck_enabled, "Spell Check");
                     });
 
-                    ui.separator();
-
-                    // Quick zoom controls in top bar
-                    if ui
-                        .small_button("🔍−")
-                        .on_hover_text("Zoom out (Ctrl+−)")
-                        .clicked()
-                    {
-                        self.zoom_level = (self.zoom_level - 0.1).max(0.5);
-                    }
-                    ui.label(
-                        egui::RichText::new(format!("{}%", (self.zoom_level * 100.0) as i32))
-                            .small(),
-                    );
-                    if ui
-                        .small_button("🔍+")
-                        .on_hover_text("Zoom in (Ctrl++)")
-                        .clicked()
-                    {
-                        self.zoom_level = (self.zoom_level + 0.1).min(3.0);
-                    }
-
                     // Right-aligned current note with save button
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if self.selected_note.is_some() {
@@ -896,6 +874,44 @@ impl eframe::App for NoteTakingApp {
         if self.sidebar_open {
             self.render_sidebar(ctx);
         }
+
+        // Bottom panel with zoom controls
+        egui::TopBottomPanel::bottom("bottom_panel")
+            .frame(
+                egui::Frame::none()
+                    .inner_margin(egui::Margin::symmetric(12.0, 6.0))
+                    .fill(egui::Color32::from_gray(25)),
+            )
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Zoom:").weak().small());
+                    if ui
+                        .small_button("🔍−")
+                        .on_hover_text("Zoom out (Ctrl+−)")
+                        .clicked()
+                    {
+                        self.zoom_level = (self.zoom_level - 0.1).max(0.5);
+                    }
+                    ui.label(
+                        egui::RichText::new(format!("{}%", (self.zoom_level * 100.0) as i32))
+                            .small(),
+                    );
+                    if ui
+                        .small_button("🔍+")
+                        .on_hover_text("Zoom in (Ctrl++)")
+                        .clicked()
+                    {
+                        self.zoom_level = (self.zoom_level + 0.1).min(3.0);
+                    }
+                    if ui
+                        .small_button("↺")
+                        .on_hover_text("Reset zoom (Ctrl+0)")
+                        .clicked()
+                    {
+                        self.zoom_level = 1.0;
+                    }
+                });
+            });
 
         self.render_central_panel(ctx);
         self.render_all_dialogs(ctx);
@@ -1103,6 +1119,31 @@ impl NoteTakingApp {
 
             // Main editor area - seamlessly editable or preview
             egui::ScrollArea::vertical().show(ui, |ui| {
+                // Apply zoom to UI style for both modes
+                let mut style = (**ui.style()).clone();
+                let base_font_size = 14.0;
+                let zoomed_font_size = base_font_size * self.zoom_level;
+
+                // Update all text styles based on zoom level
+                style.text_styles.insert(
+                    egui::TextStyle::Monospace,
+                    egui::FontId::monospace(zoomed_font_size),
+                );
+                style.text_styles.insert(
+                    egui::TextStyle::Body,
+                    egui::FontId::proportional(zoomed_font_size),
+                );
+                style.text_styles.insert(
+                    egui::TextStyle::Heading,
+                    egui::FontId::proportional(zoomed_font_size * 1.5),
+                );
+                style.text_styles.insert(
+                    egui::TextStyle::Button,
+                    egui::FontId::proportional(zoomed_font_size),
+                );
+
+                ui.set_style(style);
+
                 if self.show_markdown_preview {
                     // Clean preview mode
                     egui_commonmark::CommonMarkViewer::new().show(
@@ -1112,8 +1153,6 @@ impl NoteTakingApp {
                     );
                 } else {
                     // Clean edit mode
-                    let actual_font_size = self.font_size * self.zoom_level;
-
                     let text_edit = egui::TextEdit::multiline(&mut self.current_note_content)
                         .desired_width(f32::INFINITY)
                         .desired_rows(35)
@@ -1175,7 +1214,6 @@ impl NoteTakingApp {
 
                                 // Calculate underline position
                                 let underline_start_x = rect.min.x + 6.0 + x_offset;
-                                let underline_end_x = underline_start_x + word_width;
                                 let underline_y =
                                     rect.min.y + 6.0 + (line_num as f32 * row_height) + row_height
                                         - 2.0;
