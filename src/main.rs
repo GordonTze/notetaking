@@ -831,11 +831,6 @@ impl eframe::App for NoteTakingApp {
                             self.show_export_dialog = true;
                             ui.close_menu();
                         }
-                        if ui.button("Versions").clicked() {
-                            self.load_version_history();
-                            self.show_version_history = true;
-                            ui.close_menu();
-                        }
                         if ui.button("Encrypt").clicked() {
                             self.show_encryption_dialog = true;
                             ui.close_menu();
@@ -923,7 +918,7 @@ impl eframe::App for NoteTakingApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    // Delete buttons
+                    // Delete buttons (left)
                     if let Some(folder_idx) = self.selected_folder {
                         if self.selected_note.is_some() {
                             if ui
@@ -945,7 +940,7 @@ impl eframe::App for NoteTakingApp {
                         ui.separator();
                     }
 
-                    // Zoom controls
+                    // Zoom controls (center-left)
                     ui.label(egui::RichText::new("Zoom:").weak().small());
                     if ui
                         .small_button("🔍−")
@@ -972,6 +967,20 @@ impl eframe::App for NoteTakingApp {
                     {
                         self.zoom_level = 1.0;
                     }
+
+                    // Version history button (right)
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if self.selected_note.is_some() {
+                            if ui
+                                .small_button("📜 Versions")
+                                .on_hover_text("View version history")
+                                .clicked()
+                            {
+                                self.load_version_history();
+                                self.show_version_history = true;
+                            }
+                        }
+                    });
                 });
             });
 
